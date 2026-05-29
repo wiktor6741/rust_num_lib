@@ -125,6 +125,54 @@ pub fn matmul_tiled_parallel(m1: &Matrix, m2: &Matrix) -> Option<Matrix> {
 }
 
 
+pub fn matmul_tiled_parallel2(m1: &Matrix, m2: &Matrix) -> Option<Matrix> {
+    if m1.cols != m2.rows {
+        return None;
+    }
+
+    let num_threads = 8;
+    let rows = m1.rows;
+    let cols = m2.cols;
+    let inner = m1.cols;
+    let rows_per_thread = (rows + num_threads - 1) / num_threads;
+
+    let mut data = vec![0.0; rows * cols];
+    let data_ptr = data.as_mut_ptr() as usize;
+    let m1_ptr = m1.data.as_ptr() as usize;
+    let m2_ptr = m2.data.as_ptr() as usize;
+
+    std::thread::scope(|s| {
+        for t in 0..num_threads {
+            let start_row = t * rows_per_thread;
+            let end_row = min(start_row + rows_per_thread, rows);
+
+            s.spawn(move || {
+                let out = unsafe { std::slice::from_raw_parts_mut(
+                    (data_ptr as *mut f64).add(start_row * cols), 
+                    (end_row - start_row) * cols
+                )};
+                let a = unsafe { std::slice::from_raw_parts(
+                    m1_ptr as *const f64, rows * inner
+                )};
+                let b = unsafe { std::slice::from_raw_parts(
+                    m2_ptr as *const f64, inner * cols
+                )};
+
+                for i in start_row..end_row {
+                    for k in 0..inner {
+                        for j in 0..cols {
+                            out[(i - start_row) * cols + j] += 
+                                a[i * inner + k] * b[k * cols + j];
+                        }
+                    }
+                }
+            });
+        }
+    });
+
+    Some(Matrix { data, rows, cols })
+}
+
 pub fn matmul_benchmark<F>(f : F, name: &str, sizes: &[usize], iters: usize)
 where F: Fn(&Matrix, &Matrix) -> Option<Matrix>
 {
@@ -146,6 +194,29 @@ where F: Fn(&Matrix, &Matrix) -> Option<Matrix>
         println!("Name {}, size {}, mean {}, std {}", name, size, mean, std_dev);
     }
 }
+
+pub fn matmul_parallel_simple(m1: &Matrix, m2: &Matrix) -> Option<Matrix> {
+    if m1.cols != m2.rows {
+        return None;
+    }
+    
+    let cols = m2.cols;
+    let mut data = vec![0.0; m1.rows * cols];
+    
+    data.par_chunks_mut(cols)
+        .enumerate()
+        .for_each(|(i, row)| {
+            for k in 0..m1.cols {
+                for j in 0..cols {
+                    row[j] += m1[(i, k)] * m2[(k, j)];
+                }
+            }
+        });
+    
+    Some(Matrix { data, rows: m1.rows, cols })
+}
+
+
 
 pub fn random_matrix(rows: usize, cols: usize, min : f64, max : f64) -> Matrix {
     let mut rng = rand::thread_rng();
