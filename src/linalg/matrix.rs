@@ -135,11 +135,12 @@ pub fn matmul_tiled_parallel2(m1: &Matrix, m2: &Matrix) -> Option<Matrix> {
     let inner = m1.cols;
 
     let num_tile_rows = (rows + tile - 1) / tile;
+    println!("Num tile rows {}", num_tile_rows);
     let num_threads = if num_tile_rows >= 8 {8} else {num_tile_rows};
     let high_tile_rows_per_thread = (num_tile_rows + num_threads - 1) / num_threads;
     let low_tile_rows_per_thread = high_tile_rows_per_thread - 1;
-    let num_high = if num_tile_rows % num_threads == 0 {num_threads} else {num_threads};
-
+    let num_high = if num_tile_rows % num_threads == 0 {num_threads} else {num_tile_rows % num_threads};
+    println!("num high {}", num_high);
 
     let mut data = vec![0.0; rows * cols];
     let data_ptr = data.as_mut_ptr() as usize;
@@ -156,9 +157,7 @@ pub fn matmul_tiled_parallel2(m1: &Matrix, m2: &Matrix) -> Option<Matrix> {
 
             let end_tile_row = min(start_tile_row + local_tile_rows - 1, num_tile_rows - 1);
             let start_row = start_tile_row * tile;
-            println!("{}", start_row);
             let end_row = min((end_tile_row + 1) * tile - 1, rows -1);
-            println!("{}", end_row);
             s.spawn(move || {
                let out = unsafe { std::slice::from_raw_parts_mut(
                     (data_ptr as *mut f64).add(start_row *cols), 
