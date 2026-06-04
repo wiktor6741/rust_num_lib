@@ -129,7 +129,210 @@ pub fn matmul_tiled_parallel2(m1: &Matrix, m2: &Matrix) -> Option<Matrix> {
     if m1.cols != m2.rows {
         return None;
     }
+    let tile = 256;
+    let rows = m1.rows;
+    let cols = m2.cols;
+    let inner = m1.cols;
 
+    let num_tile_rows = (rows + tile - 1) / tile;
+    let num_threads = if num_tile_rows >= 8 {8} else {num_tile_rows};
+    let high_tile_rows_per_thread = (num_tile_rows + num_threads - 1) / num_threads;
+    let low_tile_rows_per_thread = high_tile_rows_per_thread - 1;
+    let num_high = if num_tile_rows % num_threads == 0 {num_threads} else {num_threads};
+
+
+    let mut data = vec![0.0; rows * cols];
+    let data_ptr = data.as_mut_ptr() as usize;
+    let m1_ptr = m1.data.as_ptr() as usize;
+    let m2_ptr = m2.data.as_ptr() as usize;
+
+    std::thread::scope(|s| {
+        for t in 0..num_threads {
+            let high = t + 1 <= num_high;
+            let start_tile_row = if high {high_tile_rows_per_thread * t} else 
+            {high_tile_rows_per_thread * num_high + low_tile_rows_per_thread * (t - num_high)};
+
+            let local_tile_rows = if high {high_tile_rows_per_thread} else {low_tile_rows_per_thread};
+
+            let end_tile_row = min(start_tile_row + local_tile_rows - 1, num_tile_rows - 1);
+            let start_row = start_tile_row * tile;
+            println!("{}", start_row);
+            let end_row = min((end_tile_row + 1) * tile - 1, rows -1);
+            println!("{}", end_row);
+            s.spawn(move || {
+               let out = unsafe { std::slice::from_raw_parts_mut(
+                    (data_ptr as *mut f64).add(start_row *cols), 
+                    (end_row - start_row +1) * cols
+                )};
+
+                let a = unsafe { std::slice::from_raw_parts(
+                    (m1_ptr as *const f64).add(start_row * inner),
+                     (end_row - start_row + 1) * inner
+                )};
+
+                let b = unsafe { std::slice::from_raw_parts(
+                    m2_ptr as *const f64, inner * cols
+                )};
+            
+                for i_t in 0 .. end_tile_row - start_tile_row + 1 {
+                    let i_start = i_t * tile;
+                    let i_end = min(i_start + tile, end_row - start_row + 1);
+                    //println!("{}", i_end);
+                    for k_t in 0 .. (inner + tile - 1) / tile {
+                        let k_start = k_t * tile;
+                        let k_end = min(k_start + tile, inner);
+
+                        let mut a_tile = vec![0.0; tile * tile];
+
+                        for i in i_start..i_end {
+                            for k in k_start..k_end {
+                                a_tile[(i-i_start)*tile+(k-k_start)] = a[i * inner + k];
+                            }
+                        }
+                        
+                        for j_t in 0 .. (cols + tile - 1) / tile{
+                            let j_start = j_t * tile;
+                            let j_end = min(j_start + tile, cols);
+
+                            let mut b_tile = vec![0.0; tile * tile];
+                            
+                            for k in k_start..k_end {
+                                for j in j_start..j_end {
+                                    b_tile[(k-k_start)*tile+(j-j_start)] = b[k * cols + j];
+                                }
+                            }
+                            
+                            for i in i_start .. i_end  {
+                                for k in k_start .. k_end {
+                                    for j in j_start .. j_end {
+                                        out[i*cols+j] += 
+                                            a_tile[(i - i_start)*tile+(k - k_start)] * b_tile[(k - k_start)*tile+(j - j_start)];
+                                    }
+                                }
+                            }
+                        }
+                     
+                    }
+                }
+            });
+        }
+    });
+
+    Some(Matrix { data, rows, cols })
+}
+
+
+pub fn matmul_tiled_parallel3(m1: &Matrix, m2: &Matrix) -> Option<Matrix> {
+    if m1.cols != m2.rows {
+        return None;
+    }
+    let tile = 256;
+    let rows = m1.rows;
+    let cols = m2.cols;
+    let inner = m1.cols;
+
+    let num_tile_rows = (rows + tile - 1) / tile;
+    let num_threads = if num_tile_rows >= 8 {8} else {num_tile_rows};
+    let high_tile_rows_per_thread = (num_tile_rows + num_threads - 1) / num_threads;
+    let low_tile_rows_per_thread = high_tile_rows_per_thread - 1;
+    let num_high = if num_tile_rows % num_threads == 0 {num_threads} else {num_threads};
+
+
+    let mut data = vec![0.0; rows * cols];
+    let data_ptr = data.as_mut_ptr() as usize;
+    let m1_ptr = m1.data.as_ptr() as usize;
+    let m2_ptr = m2.data.as_ptr() as usize;
+
+    std::thread::scope(|s| {
+        for t in 0..num_threads {
+            let high = t + 1 <= num_high;
+            let start_tile_row = if high {high_tile_rows_per_thread * t} else 
+            {high_tile_rows_per_thread * num_high + low_tile_rows_per_thread * (t - num_high)};
+
+            let local_tile_rows = if high {high_tile_rows_per_thread} else {low_tile_rows_per_thread};
+
+            let end_tile_row = min(start_tile_row + local_tile_rows - 1, num_tile_rows - 1);
+            let start_row = start_tile_row * tile;
+            //println!("{}", start_row);
+            let end_row = min((end_tile_row + 1) * tile - 1, rows -1);
+            //println!("{}", end_row);
+            s.spawn(move || {
+               let out = unsafe { std::slice::from_raw_parts_mut(
+                    (data_ptr as *mut f64).add(start_row *cols), 
+                    (end_row - start_row +1) * cols
+                )};
+
+                let a = unsafe { std::slice::from_raw_parts(
+                    (m1_ptr as *const f64).add(start_row * inner),
+                     (end_row - start_row + 1) * inner
+                )};
+
+                let b = unsafe { std::slice::from_raw_parts(
+                    m2_ptr as *const f64, inner * cols
+                )};
+            
+                for i_t in 0 .. end_tile_row - start_tile_row + 1 {
+                    let i_start = i_t * tile;
+                    let i_end = min(i_start + tile, end_row - start_row + 1);
+                    //println!("{}", i_end);
+                    for k_t in 0 .. (inner + tile - 1) / tile {
+                        let k_start = k_t * tile;
+                        let k_end = min(k_start + tile, inner);
+
+                        let mut a_tile = vec![0.0; tile * tile];
+
+                        for i in i_start..i_end {
+                            for k in k_start..k_end {
+                                a_tile[(i-i_start)*tile+(k-k_start)] = a[i * inner + k];
+                            }
+                        }
+                        
+                        for j_t in 0..(cols + tile - 1) / tile {
+                            let j_start = j_t * tile;
+                            let j_end = min(j_start + tile, cols);
+                            let j_size = j_end - j_start;
+                            let i_size = i_end - i_start;
+
+                            let mut b_tile = vec![0.0; tile * tile];
+                            let mut c_tile = vec![0.0; tile * tile];
+
+                            for k in k_start..k_end {
+                                for j in j_start..j_end {
+                                    b_tile[(k - k_start) * tile + (j - j_start)] = b[k * cols + j];
+                                }
+                            }
+
+                            for i in 0..i_size {
+                                for k in 0..k_end - k_start {
+                                    for j in 0..j_size {
+                                        c_tile[i * tile + j] +=
+                                            a_tile[i * tile + k] * b_tile[k * tile + j];
+                                    }
+                                }
+                            }
+
+                            // flush c_tile to out
+                            for i in 0..i_size {
+                                for j in 0..j_size {
+                                    out[(i_start + i) * cols + (j_start + j)] += c_tile[i * tile + j];
+                                }
+                            }
+                        }
+                     
+                    }
+                }
+            });
+        }
+    });
+
+    Some(Matrix { data, rows, cols })
+}
+
+
+pub fn matmul_parallel(m1: &Matrix, m2: &Matrix) -> Option<Matrix> {
+    if m1.cols != m2.rows {
+        return None;
+    }
     let num_threads = 8;
     let rows = m1.rows;
     let cols = m2.cols;
