@@ -7,8 +7,8 @@ fn main() {
     let b = linalg::random_matrix(3, 2, 0.0, 10.0);
     let c = linalg::random_matrix(2, 3, 0.0, 10.0);
 
-    let r1 = matmul_tiled_parallel2(
-        &matmul_tiled_parallel2(&a, &b).unwrap(), 
+    let r1 = matmul(
+        &matmul(&a, &b).unwrap(), 
         &c
     ).unwrap();
 
@@ -21,7 +21,7 @@ fn main() {
     let m1 = linalg::random_matrix(100, 500, 0.0, 10.0);
     let m2 = linalg::random_matrix(500, 100, 0.0, 10.0);
     let r1 = linalg::matmul_naive(&m1, &m2).unwrap();
-    let r2 = linalg::matmul_tiled_parallel2(&m1, &m2).unwrap();
+    let r2 = linalg::matmul(&m1, &m2).unwrap();
     println!("{}", linalg::matrices_equal(&r1, &r2, 1e-6));
     //println!("{:?}", &r1);
     //println!("{:?}", &r2);
@@ -38,7 +38,7 @@ fn main() {
 
     
     let sizes: [usize; 1] = [3000];
-    linalg::matmul_benchmark(linalg::matmul_tiled_parallel2, "tiled_parallel2", &sizes, 1);
+    linalg::matmul_benchmark(linalg::matmul, "tiled_parallel2", &sizes, 1);
     linalg::matmul_benchmark(linalg::matmul_tiled_parallel, "tiled_parallel", &sizes, 1);
 }
 
