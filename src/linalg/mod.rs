@@ -11,3 +11,6 @@ pub use self::matrix::matmul_parallel;
 pub use self::matrix::matmul_tiled_parallel2;
 pub use self::matrix::matmul_tiled_parallel3;
 pub use self::matrix::matmul_parallel_simple;
+pub use self::matrix::matmul_optimal_order;
+pub use self::matrix::matmul_chained;
+pub use self::matrix::chain_benchmark;

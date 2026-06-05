@@ -5,7 +5,7 @@ use rand::Rng;
 use std::cmp::min;
 use rayon::prelude::*;
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct Matrix {
     pub data: Vec<f64>,
     pub rows:  usize,
@@ -135,12 +135,10 @@ pub fn matmul_tiled_parallel2(m1: &Matrix, m2: &Matrix) -> Option<Matrix> {
     let inner = m1.cols;
 
     let num_tile_rows = (rows + tile - 1) / tile;
-    println!("Num tile rows {}", num_tile_rows);
     let num_threads = if num_tile_rows >= 8 {8} else {num_tile_rows};
     let high_tile_rows_per_thread = (num_tile_rows + num_threads - 1) / num_threads;
     let low_tile_rows_per_thread = high_tile_rows_per_thread - 1;
     let num_high = if num_tile_rows % num_threads == 0 {num_threads} else {num_tile_rows % num_threads};
-    println!("num high {}", num_high);
 
     let mut data = vec![0.0; rows * cols];
     let data_ptr = data.as_mut_ptr() as usize;
@@ -252,9 +250,7 @@ pub fn matmul_tiled_parallel3(m1: &Matrix, m2: &Matrix) -> Option<Matrix> {
 
             let end_tile_row = min(start_tile_row + local_tile_rows - 1, num_tile_rows - 1);
             let start_row = start_tile_row * tile;
-            //println!("{}", start_row);
             let end_row = min((end_tile_row + 1) * tile - 1, rows -1);
-            //println!("{}", end_row);
             s.spawn(move || {
                let out = unsafe { std::slice::from_raw_parts_mut(
                     (data_ptr as *mut f64).add(start_row *cols), 
@@ -440,4 +436,105 @@ pub fn matrices_equal(m1: &Matrix, m2: &Matrix, epsilon: f64) -> bool {
     }
     
     true
+}
+
+pub fn matmul_optimal_order(sizes: &[(usize, usize)]) -> Vec<Vec<usize>> {
+    let n = sizes.len();
+    let mut m = vec![vec![0; n]; n];
+    let mut s = vec![vec![0; n]; n];
+
+    for l in 1 .. n  {
+        for start in 0 .. n - l {
+            let mut min = usize::MAX;
+            let mut min_i : usize = 0;
+            for i in start .. start + l {
+                let cost = m[start][i] + m[i + 1][start + l] + sizes[start].0 * sizes[i].1 * sizes[start + l].1;
+                if cost < min {
+                    min = cost;
+                    min_i = i;
+                }
+            }
+            m[start][start + l] = min;
+            s[start][start + l] = min_i;
+        }
+    }
+    for i in 0..n {
+    for j in 0..n {
+        print!("{} ", s[i][j]);
+    }
+    println!();
+}
+
+    s
+}
+
+pub fn matmul_chained(matrices : &[Matrix]) -> Option<Matrix> {
+    let mut sizes : Vec<(usize, usize)> = vec![];
+    let mut latest_column_size : usize = matrices[0].rows;
+    for matrix in matrices {
+        if matrix.rows != latest_column_size {return None;}
+        sizes.push((matrix.rows, matrix.cols));
+        latest_column_size = matrix.cols;
+    }
+    let ord_mat = matmul_optimal_order(&sizes);
+    Some(matmul_chained_rec(&matrices, &ord_mat, 0, matrices.len() - 1))
+}
+
+fn matmul_chained_rec(matrices : &[Matrix], ord_mat : &Vec<Vec<usize>>, i : usize, j : usize) -> Matrix {
+    println!("multiplying {} to {}, split at {}", i, j, ord_mat[i][j]);
+    if j == i + 1 {matmul_tiled_parallel2(&matrices[i], &matrices[j]).unwrap()}
+    else if j == i {
+        println!("base case, returning matrix {}", i);
+        matrices[i].clone()
+    }
+    else {
+        let a = matmul_chained_rec(&matrices, &ord_mat, i, ord_mat[i][j]);
+        let b = matmul_chained_rec(&matrices, &ord_mat, ord_mat[i][j] + 1, j);
+        matmul_tiled_parallel2(&a, &b).unwrap()
+
+    }   
+}
+
+
+pub fn chain_benchmark(sizes: &[(usize, usize)], iters: usize) {
+    // validate chain is valid
+    for i in 0..sizes.len() - 1 {
+        if sizes[i].1 != sizes[i + 1].0 {
+            println!("Invalid chain: matrix {} cols != matrix {} rows", i, i + 1);
+            return;
+        }
+    }
+
+    let mut left_to_right_times = vec![0.0; iters];
+    let mut optimal_times = vec![0.0; iters];
+
+    for iter in 0..iters {
+        let matrices: Vec<Matrix> = sizes.iter()
+            .map(|&(rows, cols)| random_matrix(rows, cols, 0.0, 10.0))
+            .collect();
+
+        // left to right
+        let start = Instant::now();
+        let mut result = matrices[0].clone();
+        for i in 1..matrices.len() {
+            result = matmul_tiled_parallel2(&result, &matrices[i]).unwrap();
+        }
+        left_to_right_times[iter] = start.elapsed().as_secs_f64();
+
+        // optimal order
+        let start = Instant::now();
+        let chained_result = matmul_chained(&matrices).unwrap();
+        optimal_times[iter] = start.elapsed().as_secs_f64();
+
+        if !matrices_equal(&result, &chained_result, 1e-4) { println!("different results!!");}
+        println!("result ({}, {})", result.rows, result.cols);
+        println!("chained_result ({}, {})", chained_result.rows, chained_result.cols);
+    }
+
+    let ltr_mean = left_to_right_times.iter().sum::<f64>() / iters as f64;
+    let opt_mean = optimal_times.iter().sum::<f64>() / iters as f64;
+
+    println!("Left to right: {:.6}s", ltr_mean);
+    println!("Optimal order: {:.6}s", opt_mean);
+    println!("Speedup: {:.2}x", ltr_mean / opt_mean);
 }
