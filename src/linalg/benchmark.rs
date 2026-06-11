@@ -1,5 +1,5 @@
 use std::time::Instant;
-use crate::linalg::*;
+use crate::linalg::{matrix::MatrixError, *};
 
 pub fn chain_benchmark(sizes: &[(usize, usize)], iters: usize) {
     // validate chain is valid
@@ -45,7 +45,7 @@ pub fn chain_benchmark(sizes: &[(usize, usize)], iters: usize) {
 }
 
 pub fn matmul_benchmark<F>(f : F, name: &str, sizes: &[usize], iters: usize)
-where F: Fn(&Matrix, &Matrix) -> Option<Matrix>
+where F: Fn(&Matrix, &Matrix) -> Result<Matrix, MatrixError>
 {
     for size in sizes{
         let mut results = vec![0.0; iters];

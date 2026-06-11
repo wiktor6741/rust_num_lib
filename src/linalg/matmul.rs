@@ -4,9 +4,9 @@ use rayon::prelude::*;
 use crate::linalg::matrix::*;
 
 
-pub fn matmul_naive(m1: &Matrix, m2: &Matrix) -> Option<Matrix> {
+pub fn matmul_naive(m1: &Matrix, m2: &Matrix) -> Result<Matrix, MatrixError> {
     if m1.cols != m2.rows {
-       return None
+       return Err(MatrixError::DimensionMismatch { expected: (m1.cols, m2.cols), got: (m2.rows, m2.cols) });
     }
 
     let v: Vec<f64> = vec![0.0; m1.rows*m2.cols];
@@ -21,14 +21,14 @@ pub fn matmul_naive(m1: &Matrix, m2: &Matrix) -> Option<Matrix> {
         }
     }   
 
-    Some(m)
+    Ok(m)
 }
 
 
 
-pub fn matmul_better(m1: &Matrix, m2: &Matrix) -> Option<Matrix> {
+pub fn matmul_better(m1: &Matrix, m2: &Matrix) -> Result<Matrix, MatrixError> {
     if m1.cols != m2.rows {
-       return None
+       return Err(MatrixError::DimensionMismatch { expected: (m1.cols, m2.cols), got: (m2.rows, m2.cols) });
     }
 
     let v: Vec<f64> = vec![0.0; m1.rows*m2.cols];
@@ -43,12 +43,12 @@ pub fn matmul_better(m1: &Matrix, m2: &Matrix) -> Option<Matrix> {
         }
     }   
 
-    Some(m)
+    Ok(m)
 } 
 
-pub fn matmul_tiled_parallel(m1: &Matrix, m2: &Matrix) -> Option<Matrix> {
+pub fn matmul_tiled_parallel(m1: &Matrix, m2: &Matrix) -> Result<Matrix, MatrixError> {
     if m1.cols != m2.rows {
-        return None;
+        return Err(MatrixError::DimensionMismatch { expected: (m1.cols, m2.cols), got: (m2.rows, m2.cols) });
     }
     
     let tile = 256;
@@ -98,13 +98,13 @@ pub fn matmul_tiled_parallel(m1: &Matrix, m2: &Matrix) -> Option<Matrix> {
             }
         });
     
-    Some(Matrix { data, rows, cols })
+    Ok(Matrix { data, rows, cols })
 }
 
 
-pub fn matmul(m1: &Matrix, m2: &Matrix) -> Option<Matrix> {
+pub fn matmul(m1: &Matrix, m2: &Matrix) -> Result<Matrix, MatrixError> {
     if m1.cols != m2.rows {
-        return None;
+        return Err(MatrixError::DimensionMismatch { expected: (m1.cols, m2.cols), got: (m2.rows, m2.cols) });
     }
     let tile = 256;
     let rows = m1.rows;
@@ -151,7 +151,7 @@ pub fn matmul(m1: &Matrix, m2: &Matrix) -> Option<Matrix> {
                 for i_t in 0 .. end_tile_row - start_tile_row + 1 {
                     let i_start = i_t * tile;
                     let i_end = min(i_start + tile, end_row - start_row + 1);
-                    //println!("{}", i_end);
+
                     for k_t in 0 .. (inner + tile - 1) / tile {
                         let k_start = k_t * tile;
                         let k_end = min(k_start + tile, inner);
@@ -192,13 +192,13 @@ pub fn matmul(m1: &Matrix, m2: &Matrix) -> Option<Matrix> {
         }
     });
 
-    Some(Matrix { data, rows, cols })
+    Ok(Matrix { data, rows, cols })
 }
 
 
-pub fn matmul_tiled_parallel3(m1: &Matrix, m2: &Matrix) -> Option<Matrix> {
+pub fn matmul_tiled_parallel3(m1: &Matrix, m2: &Matrix) -> Result<Matrix, MatrixError> {
     if m1.cols != m2.rows {
-        return None;
+        return Err(MatrixError::DimensionMismatch { expected: (m1.cols, m2.cols), got: (m2.rows, m2.cols) });
     }
     let tile = 256;
     let rows = m1.rows;
@@ -297,13 +297,13 @@ pub fn matmul_tiled_parallel3(m1: &Matrix, m2: &Matrix) -> Option<Matrix> {
         }
     });
 
-    Some(Matrix { data, rows, cols })
+    Ok(Matrix { data, rows, cols })
 }
 
 
-pub fn matmul_parallel(m1: &Matrix, m2: &Matrix) -> Option<Matrix> {
+pub fn matmul_parallel(m1: &Matrix, m2: &Matrix) -> Result<Matrix, MatrixError> {
     if m1.cols != m2.rows {
-        return None;
+        return Err(MatrixError::DimensionMismatch { expected: (m1.cols, m2.cols), got: (m2.rows, m2.cols) });
     }
     let num_threads = 8;
     let rows = m1.rows;
@@ -345,13 +345,13 @@ pub fn matmul_parallel(m1: &Matrix, m2: &Matrix) -> Option<Matrix> {
         }
     });
 
-    Some(Matrix { data, rows, cols })
+    Ok(Matrix { data, rows, cols })
 }
 
 
-pub fn matmul_parallel_simple(m1: &Matrix, m2: &Matrix) -> Option<Matrix> {
+pub fn matmul_parallel_simple(m1: &Matrix, m2: &Matrix) -> Result<Matrix, MatrixError> {
     if m1.cols != m2.rows {
-        return None;
+        return Err(MatrixError::DimensionMismatch { expected: (m1.cols, m2.cols), got: (m2.rows, m2.cols) });
     }
     
     let cols = m2.cols;
@@ -367,7 +367,7 @@ pub fn matmul_parallel_simple(m1: &Matrix, m2: &Matrix) -> Option<Matrix> {
             }
         });
     
-    Some(Matrix { data, rows: m1.rows, cols })
+    Ok(Matrix { data, rows: m1.rows, cols })
 }
 
 pub fn matmul_optimal_order(sizes: &[(usize, usize)]) -> Vec<Vec<usize>> {
@@ -400,16 +400,19 @@ pub fn matmul_optimal_order(sizes: &[(usize, usize)]) -> Vec<Vec<usize>> {
     s
 }
 
-pub fn matmul_chained(matrices : &[Matrix]) -> Option<Matrix> {
+pub fn matmul_chained(matrices : &[Matrix]) -> Result<Matrix, MatrixError> {
     let mut sizes : Vec<(usize, usize)> = vec![];
     let mut latest_column_size : usize = matrices[0].rows;
     for matrix in matrices {
-        if matrix.rows != latest_column_size {return None;}
+        if matrix.rows != latest_column_size {return Err(MatrixError::DimensionMismatch
+             { expected: (latest_column_size, matrix.cols),
+             got: (matrix.rows, matrix.cols) });}
+
         sizes.push((matrix.rows, matrix.cols));
         latest_column_size = matrix.cols;
     }
     let ord_mat = matmul_optimal_order(&sizes);
-    Some(matmul_chained_rec(&matrices, &ord_mat, 0, matrices.len() - 1))
+    Ok(matmul_chained_rec(&matrices, &ord_mat, 0, matrices.len() - 1))
 }
 
 fn matmul_chained_rec(matrices : &[Matrix], ord_mat : &Vec<Vec<usize>>, i : usize, j : usize) -> Matrix {
