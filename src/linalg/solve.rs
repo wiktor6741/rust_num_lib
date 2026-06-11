@@ -6,15 +6,15 @@ fn swap_rows(m: &mut Matrix, row1: usize, row2: usize) {
     }
 }
 
-pub fn gauss_elimination(m : &Matrix, b : &Matrix) -> Option<Matrix> {
+pub fn gauss_elimination(m : &Matrix, b : &Matrix) -> Result<Matrix, MatrixError> {
     if b.cols != 1 {
-        return None;
+        return Err(MatrixError::NotColumnVector { cols: (b.cols) });
     }
 
     let n = b.rows;
 
     if m.rows != n || m.cols != n {
-        return None;
+        return Err(MatrixError::DimensionMismatch { expected: (n, n), got: (m.rows, m.cols) });
     }
 
     let mut m = m.clone();
@@ -52,7 +52,7 @@ pub fn gauss_elimination(m : &Matrix, b : &Matrix) -> Option<Matrix> {
         }
     }
 
-    Some(b)
+    Ok(b)
 }
 
 
@@ -111,13 +111,13 @@ mod tests {
     fn test_gauss_wrong_dimensions() {
         let m = Matrix::from_data(vec![1.0, 2.0, 3.0, 4.0], 2, 2);
         let b = Matrix::from_data(vec![1.0, 2.0, 3.0], 3, 1);
-        assert!(gauss_elimination(&m, &b).is_none());
+        assert!(gauss_elimination(&m, &b).is_err());
     }
 
     #[test]
     fn test_gauss_b_not_column_vector() {
         let m = Matrix::from_data(vec![1.0, 2.0, 3.0, 4.0], 2, 2);
         let b = Matrix::from_data(vec![1.0, 2.0, 3.0, 4.0], 2, 2);
-        assert!(gauss_elimination(&m, &b).is_none());
+        assert!(gauss_elimination(&m, &b).is_err());
     }
 }

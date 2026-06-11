@@ -10,6 +10,32 @@ pub struct Matrix {
 }
 
 
+#[derive(Debug)]
+pub enum MatrixError {
+    DimensionMismatch { expected: (usize, usize), got: (usize, usize) },
+    NotSquare { rows: usize, cols: usize },
+    NotColumnVector { cols: usize },
+    SingularMatrix,
+}
+
+impl fmt::Display for MatrixError {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        match self {
+            MatrixError::DimensionMismatch { expected, got } =>
+                write!(f, "Dimension mismatch: expected {:?}, got {:?}", expected, got),
+            MatrixError::NotSquare { rows, cols } =>
+                write!(f, "Matrix is not square: {}x{}", rows, cols),
+            MatrixError::NotColumnVector { cols } =>
+                write!(f, "Expected column vector, got {} columns", cols),
+            MatrixError::SingularMatrix =>
+                write!(f, "Matrix is singular, cannot solve"),
+        }
+    }
+}
+
+impl std::error::Error for MatrixError {}
+
+
 impl Index<(usize, usize)> for Matrix {
     type Output = f64;
     
