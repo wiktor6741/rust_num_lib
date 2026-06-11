@@ -1,5 +1,6 @@
 use std::ops::{Index, IndexMut};
 use rand::Rng;
+use std::fmt;
 
 #[derive(Debug, Clone)]
 pub struct Matrix {
@@ -43,4 +44,34 @@ pub fn matrices_equal(m1: &Matrix, m2: &Matrix, epsilon: f64) -> bool {
     }
     
     true
+}
+
+pub fn zero_matrix(rows: usize, cols: usize) -> Matrix {
+    let v = vec![0.0; rows*cols];
+    Matrix{rows: rows, cols: cols, data: v}
+}
+
+impl Matrix {
+    pub fn from_data(data: Vec<f64>, rows: usize, cols: usize) -> Matrix {
+        assert_eq!(data.len(), rows * cols, 
+            "data length {} doesn't match {}x{}", data.len(), rows, cols);
+        Matrix { data, rows, cols }
+    }
+}
+
+impl fmt::Display for Matrix {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        for i in 0..self.rows {
+            write!(f, "[")?;
+            for j in 0..self.cols {
+                if j < self.cols - 1 {
+                    write!(f, "{:.4}, ", self[(i, j)])?;
+                } else {
+                    write!(f, "{:.4}", self[(i, j)])?;
+                }
+            }
+            writeln!(f, "]")?;
+        }
+        Ok(())
+    }
 }
