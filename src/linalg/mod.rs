@@ -2,6 +2,7 @@ mod matmul;
 mod matrix;
 mod benchmark;
 mod solve;
+mod eigenv;
 
 pub use self::matrix::Matrix;
 pub use self::matrix::matrices_equal;

@@ -1,4 +1,3 @@
-use std::time::Instant;
 use std::cmp::min;
 use rayon::prelude::*;
 use crate::linalg::matrix::*;

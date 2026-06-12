@@ -1,6 +1,7 @@
 use std::ops::{Index, IndexMut};
 use rand::Rng;
 use std::fmt;
+use crate::linalg::solve::doolitle_factorize;
 
 #[derive(Debug, Clone)]
 pub struct Matrix {
@@ -16,6 +17,7 @@ pub enum MatrixError {
     NotSquare { rows: usize, cols: usize },
     NotColumnVector { cols: usize },
     SingularMatrix,
+    LinearlyDependentColumns
 }
 
 impl fmt::Display for MatrixError {
@@ -29,6 +31,8 @@ impl fmt::Display for MatrixError {
                 write!(f, "Expected column vector, got {} columns", cols),
             MatrixError::SingularMatrix =>
                 write!(f, "Matrix is singular, cannot solve"),
+            MatrixError::LinearlyDependentColumns =>
+                write!(f, "Columns are linearly dependent")
         }
     }
 }
@@ -83,7 +87,55 @@ impl Matrix {
             "data length {} doesn't match {}x{}", data.len(), rows, cols);
         Matrix { data, rows, cols }
     }
+
+
+    pub fn transpose(&mut self){
+        let cp = self.clone();
+        self.cols = cp.rows;
+        self.rows = cp.cols;
+        for i in 0 .. self.rows {
+            for j in 0 .. self.cols {
+                self[(i, j)] = cp[(j, i)];
+            }
+        }
+    }
+
+    pub fn transposed(&self) -> Matrix {
+        let mut result = zero_matrix(self.cols, self.rows);
+        for i in 0..self.rows {
+            for j in 0..self.cols {
+                result[(j, i)] = self[(i, j)];
+            }
+        }
+        result
+    }
+
+    fn permutation_sign(perm: &[usize]) -> f64 {
+        let n = perm.len();
+        let mut inversions = 0;
+        for i in 0..n {
+            for j in i+1..n {
+                if perm[i] > perm[j] {
+                    inversions += 1;
+                }
+            }
+        }
+        if inversions % 2 == 0 { 1.0 } else { -1.0 }
+    }
+
+    pub fn determinant(a: Matrix) -> Result<f64, MatrixError> {
+        match doolitle_factorize(&a) {
+            Ok((_, u, perm)) => {
+                let n = u.rows;
+                let sign = Matrix::permutation_sign(&perm);
+                Ok(sign * (0..n).map(|i| u[(i, i)]).product::<f64>())
+            },
+            Err(MatrixError::SingularMatrix) => Ok(0.0),
+            Err(e) => Err(e),  
+        }
+    }
 }
+
 
 impl fmt::Display for Matrix {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
@@ -99,5 +151,50 @@ impl fmt::Display for Matrix {
             writeln!(f, "]")?;
         }
         Ok(())
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn assert_matrices_equal(result: &Matrix, expected: &Matrix, epsilon: f64) {
+    assert!(matrices_equal(result, expected, epsilon),
+        "matrices differ:\nresult:\n{}\nexpected:\n{}", result, expected);
+    }
+
+    #[test] 
+    fn transpose_test(){
+        let mut m = Matrix::from_data(vec![1.0, 2.0, 3.0, 4.0, 5.0, 6.0], 2, 3);
+        let expected_t = Matrix::from_data(vec![1.0, 4.0, 2.0, 5.0, 3.0, 6.0], 3, 2);
+        m.transpose();
+        assert_matrices_equal(&m, &expected_t, 1e-9);
+    }
+
+    #[test]
+    fn transposed_test(){
+        let m = Matrix::from_data(vec![1.0, 2.0, 3.0, 4.0, 5.0, 6.0], 2, 3);
+        let expected_t = Matrix::from_data(vec![1.0, 4.0, 2.0, 5.0, 3.0, 6.0], 3, 2);
+        let t = m.transposed();
+        assert_matrices_equal(&t, &expected_t, 1e-9);
+    }
+
+    #[test]
+    fn determinant_3x3_test(){
+        let m = Matrix::from_data(vec![3.0, 4.0, 12.0, 8.0, 3.0, 6.0, 1.0, 2.0, 6.0], 3, 3);
+        assert!((Matrix::determinant(m).unwrap() - 6.0).abs() < 1e-9);
+    }
+
+    #[test]
+    fn determinant_singular_test(){
+        let a = Matrix::from_data(vec![ 1.0, 2.0, 2.0, 4.0,], 2, 2);
+        let det = Matrix::determinant(a).unwrap();
+        assert_eq!(det, 0.0);
+    }
+
+    #[test]
+    fn test_determinant_not_square() {
+        let a = Matrix::from_data(vec![1.0, 2.0, 3.0], 1, 3);
+        assert!(Matrix::determinant(a).is_err());
     }
 }
