@@ -65,3 +65,4 @@ where F: Fn(&Matrix, &Matrix) -> Result<Matrix, MatrixError>
         println!("Name {}, size {}, mean {}, std {}", name, size, mean, std_dev);
     }
 }
+

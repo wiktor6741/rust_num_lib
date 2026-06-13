@@ -17,7 +17,8 @@ pub enum MatrixError {
     NotSquare { rows: usize, cols: usize },
     NotColumnVector { cols: usize },
     SingularMatrix,
-    LinearlyDependentColumns
+    LinearlyDependentColumns,
+    SliceError
 }
 
 impl fmt::Display for MatrixError {
@@ -32,7 +33,10 @@ impl fmt::Display for MatrixError {
             MatrixError::SingularMatrix =>
                 write!(f, "Matrix is singular, cannot solve"),
             MatrixError::LinearlyDependentColumns =>
-                write!(f, "Columns are linearly dependent")
+                write!(f, "Columns are linearly dependent"),
+            MatrixError::SliceError => 
+                write!(f, "Invalid slice")
+
         }
     }
 }
@@ -134,6 +138,64 @@ impl Matrix {
             Err(e) => Err(e),  
         }
     }
+
+    pub fn slice(&self, row_range : Option<(usize, usize)>, row_step : Option<i32>,
+     col_range : Option<(usize, usize)>, col_step : Option<i32>) -> Result<Matrix, MatrixError>{
+
+        let (row_start, row_end) = row_range.unwrap_or((0, self.rows));
+        let row_step = row_step.unwrap_or(1);
+        let (col_start, col_end) =col_range.unwrap_or((0, self.cols));
+        let col_step = col_step.unwrap_or(1);
+
+        let row_reverse = row_step < 0;
+        let col_reverse = col_step < 0;
+        let row_step : usize = row_step.abs().try_into().unwrap();
+        let col_step : usize = col_step.abs().try_into().unwrap();
+
+
+
+        if row_end >  self.rows || col_end > self.cols ||
+         row_start > row_end || col_start > col_end ||
+          row_step == 0 || col_step == 0  {return Err(MatrixError::SliceError)}
+
+        let row_iter = if row_reverse {(row_start .. row_end).step_by(row_step).rev().collect::<Vec<usize>>().into_iter()}
+                            else {(row_start .. row_end).step_by(row_step).collect::<Vec<usize>>().into_iter()};
+        
+        let col_iter = if col_reverse {(col_start .. col_end).step_by(col_step).rev().collect::<Vec<usize>>().into_iter()}
+                            else {(col_start .. col_end).step_by(col_step).collect::<Vec<usize>>().into_iter()};
+
+
+        let rows = row_iter.len();
+        let cols = col_iter.len();
+        let data: Vec<f64> = row_iter.flat_map(|r| col_iter.clone().map(move |c| (r, c))).map(|(r, c)| self[(r, c)]).collect();
+
+        Ok(Matrix::from_data(data, rows, cols))
+
+        }
+
+    pub fn row_matrix(&self, i: usize) -> Result<Matrix, MatrixError> {
+        if i >= self.rows {return Err(MatrixError::SliceError)}
+
+        let data : Vec<f64> = (0 .. self.cols).map(|j| self[(i, j)]).collect();
+
+        Ok(Matrix::from_data(data, 1, self.cols))
+    }    
+    
+    pub fn col_matrix(&self, i: usize) -> Result<Matrix, MatrixError> {
+        if i >= self.cols {return Err(MatrixError::SliceError)}
+
+        let data : Vec<f64> = (0 .. self.rows).map(|j| self[(j, i)]).collect();
+
+        Ok(Matrix::from_data(data, 1, self.rows))
+    }  
+
+    pub fn identity(size : usize) -> Matrix {
+        let mut m = zero_matrix(size, size);
+        for i in 0 .. size {
+            m[(i, i)] = 1.0;
+        }
+        m
+    }
 }
 
 
@@ -196,5 +258,55 @@ mod tests {
     fn test_determinant_not_square() {
         let a = Matrix::from_data(vec![1.0, 2.0, 3.0], 1, 3);
         assert!(Matrix::determinant(a).is_err());
+    }
+
+    #[test]
+    fn test_slice_basic() {
+        let m = Matrix::from_data((0..20).map(|x| x as f64).collect(), 4, 5);
+        // m:
+        //  0  1  2  3  4
+        //  5  6  7  8  9
+        // 10 11 12 13 14
+        // 15 16 17 18 19
+        
+        // wiersze 1-3, kolumny 1-4, krok 1
+        let s = m.slice(Some((1, 3)), None, Some((1, 4)), None).unwrap();
+        // powinno być:
+        //  6  7  8
+        // 11 12 13
+        assert_eq!(s.rows, 2);
+        assert_eq!(s.cols, 3);
+        assert_eq!(s[(0,0)], 6.0);
+        assert_eq!(s[(1,2)], 13.0);
+    }
+
+    #[test]
+    fn test_slice_with_step() {
+        let m = Matrix::from_data((0..20).map(|x| x as f64).collect(), 4, 5);
+        
+        // wiersze 0,2 (krok 2), wszystkie kolumny
+        let s = m.slice(Some((0, 4)), Some(2), None, None).unwrap();
+        assert_eq!(s.rows, 2);
+        assert_eq!(s[(0,0)], 0.0);
+        assert_eq!(s[(1,0)], 10.0);
+    }
+
+    #[test]
+    fn test_slice_reverse() {
+        let m = Matrix::from_data((0..20).map(|x| x as f64).collect(), 4, 5);
+        
+        // wiersze odwrócone
+        let s = m.slice(Some((0, 4)), Some(-1), None, None).unwrap();
+        assert_eq!(s[(0,0)], 15.0);  // ostatni wiersz pierwszy
+        assert_eq!(s[(3,0)], 0.0);   // pierwszy wiersz ostatni
+    }
+
+    #[test]
+    fn test_slice_invalid_range() {
+        let m = Matrix::from_data((0..20).map(|x| x as f64).collect(), 4, 5);
+        
+        assert!(m.slice(Some((3, 1)), None, None, None).is_err());  // start > end
+        assert!(m.slice(Some((0, 10)), None, None, None).is_err()); // poza zakresem
+        assert!(m.slice(None, Some(0), None, None).is_err());       // step = 0
     }
 }
