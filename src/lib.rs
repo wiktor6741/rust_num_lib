@@ -16,8 +16,22 @@ impl From<MatrixError> for PyErr {
 }
 
 #[pymodule]
-#[pyo3(name = "linalg")] 
-fn linalg_py(_py: Python, m: &Bound<'_, PyModule>) -> PyResult<()> {
+#[pyo3(name = "rust_num_lib")]
+fn rust_num_lib(py: Python, m: &Bound<'_, PyModule>) -> PyResult<()> {
+    // submoduł linalg
+    let linalg_mod = PyModule::new(py, "linalg")?;
+    register_linalg(&linalg_mod)?;
+    m.add_submodule(&linalg_mod)?;
+
+    // żeby `import rust_num_lib.linalg` działało
+    py.import("sys")?
+        .getattr("modules")?
+        .set_item("rust_num_lib.linalg", &linalg_mod)?;
+
+    Ok(())
+}
+
+fn register_linalg(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_class::<Matrix>()?;
 
     m.add_function(wrap_pyfunction!(py_matmul_chained, m)?)?;

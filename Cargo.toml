@@ -9,5 +9,5 @@ rand = "0.8"
 rayon = "1.12"
 
 [lib]
-name = "linalg"
+name = "rust_num_lib"
 crate-type = ["cdylib", "rlib"]
