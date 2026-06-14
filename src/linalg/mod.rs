@@ -5,6 +5,7 @@ mod solve;
 mod eigenv;
 
 pub use self::matrix::Matrix;
+pub use self::matrix::MatrixError;
 pub use self::matrix::matrices_equal;
 
 pub use self::matmul::matmul_better;
