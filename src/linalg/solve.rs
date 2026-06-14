@@ -47,7 +47,6 @@ pub fn gauss_elimination(m : &Matrix, b : &Matrix) -> Result<Matrix, MatrixError
             }
             b[(j, 0)] -= b[(i, 0)] * factor;
         }  
-        println!("m: {}, b: {}", m , b);
     }
 
     if m[(n - 1 , n - 1)].abs() < 1e-12 {return Err(MatrixError::SingularMatrix);}
@@ -76,8 +75,8 @@ pub fn doolitle_factorize(a: &Matrix) -> Result<(Matrix, Matrix, Vec<usize>), Ma
 
     let mut a = a.clone();
 
-    let mut l = zero_matrix(n, n);
-    let mut u = zero_matrix(n, n);
+    let mut l = Matrix::zeros(n, n);
+    let mut u = Matrix::zeros(n, n);
 
     for i in 0 .. n {
         let mut max_val: f64 = 0.0;
@@ -114,7 +113,7 @@ pub fn doolitle_factorize(a: &Matrix) -> Result<(Matrix, Matrix, Vec<usize>), Ma
     Ok((l, u, perm))
 }
 
-pub fn solve_factorized(l : &Matrix, u : &Matrix, b : &Matrix, p : Option<Vec<usize>>) -> Result<Matrix, MatrixError>{
+pub fn solve_factorized(l : &Matrix, u : &Matrix, b : &Matrix, p : Option<&Vec<usize>>) -> Result<Matrix, MatrixError>{
     if b.cols != 1 {
         return Err(MatrixError::NotColumnVector { cols: b.cols });
     }
@@ -134,7 +133,7 @@ pub fn solve_factorized(l : &Matrix, u : &Matrix, b : &Matrix, p : Option<Vec<us
 
     let mut b_perm: Matrix = match p {
         Some(perm) => {
-            let mut b_perm = zero_matrix(n, 1);
+            let mut b_perm = Matrix::zeros(n, 1);
             for i in 0..n {
                 b_perm[(i, 0)] = b[(perm[i], 0)];
             }
@@ -163,8 +162,15 @@ pub fn solve_factorized(l : &Matrix, u : &Matrix, b : &Matrix, p : Option<Vec<us
 
 pub fn doolitle_solve(m : &Matrix, b : &Matrix) -> Result<Matrix, MatrixError> {
     let (l, u, p) = doolitle_factorize(m)?;
-    let x = solve_factorized(&l, &u, &b, Some(p))?;
+    let x = solve_factorized(&l, &u, &b, Some(&p))?;
     Ok(x)
+}
+
+pub fn solve_multiple(a: &Matrix, bs: &[Matrix]) -> Result<Vec<Matrix>, MatrixError> {
+    let (l, u, perm) = doolitle_factorize(a)?;  // faktoryzacja raz
+    bs.iter()
+        .map(|b| solve_factorized(&l, &u, b, Some(&perm)))
+        .collect()
 }
 
 
@@ -257,7 +263,7 @@ mod tests {
         let lu = matmul::matmul_naive(&l, &u).unwrap();
         
         // przestaw oryginalną A zgodnie z perm
-        let mut pa = zero_matrix(3, 3);
+        let mut pa = Matrix::zeros(3, 3);
         for i in 0..3 {
             for j in 0..3 {
                 pa[(i, j)] = a[(perm[i], j)];

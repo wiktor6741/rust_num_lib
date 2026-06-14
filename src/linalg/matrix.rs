@@ -1,7 +1,8 @@
 use std::ops::{Index, IndexMut};
 use rand::Rng;
 use std::fmt;
-use crate::linalg::solve::doolitle_factorize;
+use crate::linalg::{eigenv, solve::doolitle_factorize, matmul::matmul};
+use std::ops::{Add, Mul};
 
 #[derive(Debug, Clone)]
 pub struct Matrix {
@@ -58,31 +59,52 @@ impl IndexMut<(usize, usize)> for Matrix {
     }
 }
 
-pub fn random_matrix(rows: usize, cols: usize, min : f64, max : f64) -> Matrix {
-    let mut rng = rand::thread_rng();
-    let v: Vec<f64> = (0..rows*cols).map(|_| rng.gen_range(min..max)).collect();
-    Matrix{data: v, rows, cols}
-}
+fn add_matrices(m1 : &Matrix, m2 : &Matrix) -> Result<Matrix, MatrixError> {
+        if m1.rows != m2.rows || m1.cols != m2.cols {
+            return Err(MatrixError::DimensionMismatch { expected: (m1.rows, m1.cols), got: (m2.rows, m2.cols) })}
 
-pub fn matrices_equal(m1: &Matrix, m2: &Matrix, epsilon: f64) -> bool {
-    if m1.rows != m2.rows || m1.cols != m2.cols {
-        return false;
-    }
-    
-    for i in 0..m1.rows {
-        for j in 0..m1.cols {
-            if (m1[(i,j)] - m2[(i,j)]).abs() > epsilon {
-                return false;
+        let mut res = Matrix::zeros(m1.rows, m1.cols);
+
+        for i in 0 .. m1.rows {
+            for j in 0 .. m1.cols{
+                res[(i, j)] = m1[(i, j)] + m2[(i, j)]
             }
         }
-    }
+        Ok(res)
+}   
+
+impl Add for &Matrix {
+    type Output = Result<Matrix, MatrixError>;
     
-    true
+    fn add(self, rhs: &Matrix) -> Result<Matrix, MatrixError> {
+        add_matrices(self, rhs)  
+    }
 }
 
-pub fn zero_matrix(rows: usize, cols: usize) -> Matrix {
-    let v = vec![0.0; rows*cols];
-    Matrix{rows: rows, cols: cols, data: v}
+impl Mul for &Matrix {
+    type Output = Result<Matrix, MatrixError>;
+    
+    fn mul(self, rhs: &Matrix) -> Result<Matrix, MatrixError> {
+        matmul(self, rhs)
+    }
+}
+
+
+
+pub fn matrices_equal(m1: &Matrix, m2: &Matrix, epsilon: f64) -> bool {
+        if m1.rows != m2.rows || m1.cols != m2.cols {
+            return false;
+        }
+        
+        for i in 0..m1.rows {
+            for j in 0..m1.cols {
+                if (m1[(i,j)] - m2[(i,j)]).abs() > epsilon {
+                    return false;
+                }
+            }
+        }
+        
+        true
 }
 
 impl Matrix {
@@ -105,7 +127,7 @@ impl Matrix {
     }
 
     pub fn transposed(&self) -> Matrix {
-        let mut result = zero_matrix(self.cols, self.rows);
+        let mut result = Matrix::zeros(self.cols, self.rows);
         for i in 0..self.rows {
             for j in 0..self.cols {
                 result[(j, i)] = self[(i, j)];
@@ -127,8 +149,8 @@ impl Matrix {
         if inversions % 2 == 0 { 1.0 } else { -1.0 }
     }
 
-    pub fn determinant(a: Matrix) -> Result<f64, MatrixError> {
-        match doolitle_factorize(&a) {
+    pub fn determinant(&self) -> Result<f64, MatrixError> {
+        match doolitle_factorize(&self) {
             Ok((_, u, perm)) => {
                 let n = u.rows;
                 let sign = Matrix::permutation_sign(&perm);
@@ -186,18 +208,69 @@ impl Matrix {
 
         let data : Vec<f64> = (0 .. self.rows).map(|j| self[(j, i)]).collect();
 
-        Ok(Matrix::from_data(data, 1, self.rows))
+        Ok(Matrix::from_data(data, self.rows, 1))
     }  
 
     pub fn identity(size : usize) -> Matrix {
-        let mut m = zero_matrix(size, size);
+        let mut m = Matrix::zeros(size, size);
         for i in 0 .. size {
             m[(i, i)] = 1.0;
         }
         m
-    }
-}
+    } 
 
+    pub fn random(rows: usize, cols: usize, min : f64, max : f64) -> Matrix {
+        let mut rng = rand::thread_rng();
+        let v: Vec<f64> = (0..rows*cols).map(|_| rng.gen_range(min..max)).collect();
+        Matrix{data: v, rows, cols}
+    }    
+
+    pub fn eigenvalues(&self, steps : Option<u32>) -> Result<Vec<f64>, MatrixError> {
+        eigenv::eigenvalues(&self, steps)
+    }
+
+    pub fn eigenv_full(&self, steps : Option<u32>) -> Result<(Vec<f64>, Vec<Matrix>), MatrixError> {
+        eigenv::eigenvalues_eigenvectors(&self, steps)
+    }
+
+
+    pub fn zeros(rows: usize, cols: usize) -> Matrix {
+        let v = vec![0.0; rows*cols];
+        Matrix{rows: rows, cols: cols, data: v}
+    }
+
+    pub fn trace(&self) -> f64 {
+        (0..self.rows.min(self.cols)).map(|i| self[(i,i)]).sum()
+    }
+    
+    pub fn norm(&self) -> f64 {
+        self.data.iter().map(|x| x*x).sum::<f64>().sqrt()
+    }
+    
+    pub fn rank(&self) -> usize {
+        match doolitle_factorize(self) {
+            Ok((_, u, _)) => {
+                (0..u.rows.min(u.cols))
+                    .filter(|&i| u[(i, i)].abs() > 1e-10)
+                    .count()
+            },
+            Err(_) => 0,
+        }
+    }
+    
+    pub fn is_symmetric(&self, epsilon: f64) -> bool {
+        if self.rows != self.cols { return false; }
+            for i in 0..self.rows {
+                for j in i+1..self.cols {
+                    if (self[(i,j)] - self[(j,i)]).abs() > epsilon {
+                        return false;
+                    }
+                }
+            }
+            true
+     }
+
+}
 
 impl fmt::Display for Matrix {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
@@ -244,20 +317,20 @@ mod tests {
     #[test]
     fn determinant_3x3_test(){
         let m = Matrix::from_data(vec![3.0, 4.0, 12.0, 8.0, 3.0, 6.0, 1.0, 2.0, 6.0], 3, 3);
-        assert!((Matrix::determinant(m).unwrap() - 6.0).abs() < 1e-9);
+        assert!((m.determinant().unwrap() - 6.0).abs() < 1e-9);
     }
 
     #[test]
     fn determinant_singular_test(){
         let a = Matrix::from_data(vec![ 1.0, 2.0, 2.0, 4.0,], 2, 2);
-        let det = Matrix::determinant(a).unwrap();
+        let det = a.determinant().unwrap();
         assert_eq!(det, 0.0);
     }
 
     #[test]
     fn test_determinant_not_square() {
         let a = Matrix::from_data(vec![1.0, 2.0, 3.0], 1, 3);
-        assert!(Matrix::determinant(a).is_err());
+        assert!(a.determinant().is_err());
     }
 
     #[test]
