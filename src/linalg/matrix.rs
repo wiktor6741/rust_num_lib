@@ -3,7 +3,10 @@ use rand::Rng;
 use std::fmt;
 use crate::linalg::{eigenv, solve::doolitle_factorize, matmul::matmul};
 use std::ops::{Add, Mul};
+use pyo3::pyclass;
 
+
+#[pyclass]
 #[derive(Debug, Clone)]
 pub struct Matrix {
     pub data: Vec<f64>,
