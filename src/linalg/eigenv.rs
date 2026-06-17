@@ -125,12 +125,6 @@ use super::*;
         assert!((a - b).abs() < epsilon, "expected {} got {}", b, a);
     }
 
-    fn assert_matrices_equal(result: &Matrix, expected: &Matrix, epsilon: f64) {
-        assert!(matrices_equal(result, expected, epsilon),
-            "matrices differ:\nresult:\n{}\nexpected:\n{}", result, expected);
-    }
-    // ---------- QR Factorize ----------
-
     #[test]
     fn test_qr_factorize_identity() {
         let a = Matrix::from_data(vec![

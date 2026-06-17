@@ -1,3 +1,5 @@
 /target
 /.venv
 /venv
+
+.DS_Store

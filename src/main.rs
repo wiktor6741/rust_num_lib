@@ -2,6 +2,7 @@ use std::time::Instant;
 use rayon::prelude::*;
 mod linalg;
 use linalg::*;
+mod stats;
 fn main() {
 
     linalg::solve_benchmark(&[10, 50, 100, 200, 500], 10);
