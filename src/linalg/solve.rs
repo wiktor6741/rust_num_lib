@@ -31,7 +31,7 @@ pub fn gauss_elimination(m : &Matrix, b : &Matrix) -> Result<Matrix, MatrixError
             }
         }
 
-        if m_max.abs() < 1e-12 {
+        if m_max.abs() < 1e-15 {
             return Err(MatrixError::SingularMatrix);
         }
 
@@ -49,7 +49,7 @@ pub fn gauss_elimination(m : &Matrix, b : &Matrix) -> Result<Matrix, MatrixError
         }  
     }
 
-    if m[(n - 1 , n - 1)].abs() < 1e-12 {return Err(MatrixError::SingularMatrix);}
+    if m[(n - 1 , n - 1)].abs() < 1e-15 {return Err(MatrixError::SingularMatrix);}
 
     for i in (0 .. n).rev() {
         b[(i, 0)] /= m[(i, i)];
@@ -177,11 +177,6 @@ pub fn solve_multiple(a: &Matrix, bs: &[Matrix]) -> Result<Vec<Matrix>, MatrixEr
 #[cfg(test)]
 mod tests {
     use super::*;
-
-    fn assert_matrices_equal(result: &Matrix, expected: &Matrix, epsilon: f64) {
-        assert!(matrices_equal(result, expected, epsilon),
-            "matrices differ:\nresult:\n{}\nexpected:\n{}", result, expected);
-    }
 
     #[test]
     fn test_gauss_simple_2x2() {

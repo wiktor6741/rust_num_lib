@@ -1,6 +1,8 @@
 // src/python.rs
 use pyo3::prelude::*;
-use crate::linalg::{Matrix, matmul};
+use crate::linalg::{self, Matrix, matmul};
+
+
 
 #[pymethods]
 impl Matrix {
@@ -57,6 +59,14 @@ impl Matrix {
 
     fn __add__(&self, other: &Matrix) -> PyResult<Matrix> {
         Ok((self + other)?)
+    }
+
+    fn __mul__(&self, scalar: f64) -> Matrix {
+    self * scalar
+    }
+
+    fn __rmul__(&self, scalar: f64) -> Matrix {
+        self * scalar  
     }
 
     // ---- indeksowanie ----
@@ -133,4 +143,15 @@ impl Matrix {
     ) -> PyResult<Matrix> {
         Ok(self.slice(row_range, row_step, col_range, col_step)?)
     }
+
+    #[pyo3(name = "apply_along_axis")]
+    fn py_apply_along_axis(&self, f: Py<PyAny>, axis: u32, py: Python) -> PyResult<Matrix> {
+        Ok(linalg::apply_along_axis(self, |v| {
+            f.call1(py, (v.clone(),))
+                .unwrap()
+                .extract::<f64>(py)
+                .unwrap()
+        }, axis)?)
+    }
+
 }

@@ -3,10 +3,11 @@ use rand::Rng;
 use std::fmt;
 use crate::linalg::{eigenv, solve::doolitle_factorize, matmul::matmul};
 use std::ops::{Add, Mul};
+
+#[cfg(feature = "python")]
 use pyo3::pyclass;
 
-
-#[pyclass]
+#[cfg_attr(feature = "python", pyclass)] 
 #[derive(Debug, Clone)]
 pub struct Matrix {
     pub data: Vec<f64>,
@@ -22,8 +23,30 @@ pub enum MatrixError {
     NotColumnVector { cols: usize },
     SingularMatrix,
     LinearlyDependentColumns,
-    SliceError
+    SliceError,
+    AxisError,
+    NotPositiveDefinite,
 }
+
+
+
+pub fn apply_along_axis<F>(m : &Matrix, f : F, axis: u32) -> Result<Matrix, MatrixError>
+where F: Fn(&Matrix) -> f64
+ {
+        match axis {
+        0 => {
+            let data = (0 .. m.cols).map(|i| f(&m.col_matrix(i).unwrap())).collect(); 
+            Ok(Matrix::from_data(data, 1, m.cols))
+        },
+        1 => {
+            let data = (0 .. m.rows).map(|i| f(&m.row_matrix(i).unwrap())).collect(); 
+            Ok(Matrix::from_data(data, m.rows, 1))
+        }
+        _ => Err(MatrixError::AxisError)
+    }
+ }
+
+ 
 
 impl fmt::Display for MatrixError {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
@@ -39,8 +62,11 @@ impl fmt::Display for MatrixError {
             MatrixError::LinearlyDependentColumns =>
                 write!(f, "Columns are linearly dependent"),
             MatrixError::SliceError => 
-                write!(f, "Invalid slice")
-
+                write!(f, "Invalid slice"),
+            MatrixError::AxisError =>
+                write!(f, "Axis must be 0 or 1"),
+            MatrixError::NotPositiveDefinite => 
+                write!(f, "Matrix is not positive definite"),
         }
     }
 }
@@ -89,6 +115,23 @@ impl Mul for &Matrix {
     
     fn mul(self, rhs: &Matrix) -> Result<Matrix, MatrixError> {
         matmul(self, rhs)
+    }
+}
+
+impl Mul<&Matrix> for f64 {
+    type Output = Matrix;
+    
+    fn mul(self, m: &Matrix) -> Matrix {
+        m * self  
+    }
+}
+
+impl Mul<f64> for &Matrix {
+    type Output = Matrix;
+    
+    fn mul(self, scalar: f64) -> Matrix {
+        let data: Vec<f64> = self.data.iter().map(|x| x * scalar).collect();
+        Matrix::from_data(data, self.rows, self.cols)
     }
 }
 
@@ -292,14 +335,37 @@ impl fmt::Display for Matrix {
     }
 }
 
+pub fn assert_matrices_equal(result: &Matrix, expected: &Matrix, epsilon: f64) {
+    assert!(matrices_equal(result, expected, epsilon),
+        "matrices differ:\nresult:\n{}\nexpected:\n{}", result, expected);
+    }
+
+pub type Vector = Matrix;
+
+pub fn vector(data: Vec<f64>) -> Vector {
+        let n = data.len();
+        Matrix::from_data(data, n, 1)
+}
+
+impl Index<usize> for Matrix {
+    type Output = f64;
+    
+    fn index(&self, i: usize) -> &f64 {
+        &self.data[i]
+    }
+}
+
+impl IndexMut<usize> for Matrix {
+    fn index_mut(&mut self, i: usize) -> &mut f64 {
+        &mut self.data[i]
+    }
+}
+
+
 #[cfg(test)]
 mod tests {
     use super::*;
 
-    fn assert_matrices_equal(result: &Matrix, expected: &Matrix, epsilon: f64) {
-    assert!(matrices_equal(result, expected, epsilon),
-        "matrices differ:\nresult:\n{}\nexpected:\n{}", result, expected);
-    }
 
     #[test] 
     fn transpose_test(){
