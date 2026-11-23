@@ -1,5 +1,3 @@
-use std::time::Instant;
-use rayon::prelude::*;
 mod linalg;
 use linalg::*;
 mod stats;

@@ -1,5 +1,28 @@
+# Rust
 /target
+
+# Python
 /.venv
 /venv
+__pycache__/
+*.py[cod]
+*.egg-info/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
 
+# Compiled extension built by maturin
+/python/rust_num_lib/*.so
+/python/rust_num_lib/*.pyd
+
+# Build artifacts
+*.whl
+/dist/
+
+# macOS
 .DS_Store
+
+# Editors / IDEs
+.idea/
+.vscode/
+*.swp
