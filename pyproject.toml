@@ -3,8 +3,27 @@ requires = ["maturin>=1.0,<2.0"]
 build-backend = "maturin"
 
 [project]
-name = "rust_num_lib"
-version = "0.1.0"
+name = "rust-num-lib"                
+version = "0.1.0"                     
+description = "Scientific computing library written in Rust: linear algebra and statistics"
+readme = "README.md"
+requires-python = ">=3.9"
+license = { text = "MIT" }
+authors = [{ name = "Wiktor Augustyn", email = "wiktoraugustyn2005@gmail.com" }]
+keywords = ["linear algebra", "matrix", "statistics", "rust"]
+classifiers = [
+  "Development Status :: 3 - Alpha",
+  "Intended Audience :: Science/Research",
+  "License :: OSI Approved :: MIT License",
+  "Programming Language :: Rust",
+  "Programming Language :: Python :: 3",
+  "Topic :: Scientific/Engineering :: Mathematics",
+  "Typing :: Typed",
+]
+
+[project.urls]
+Repository = "https://github.com/wiktor6741/rust_num_lib"
+Documentation = "https://github.com/wiktor6741/rust_num_lib/blob/main/docs/rust_num_lib.pdf"
 
 [tool.maturin]
 features = ["python"]
